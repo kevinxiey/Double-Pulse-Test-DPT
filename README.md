@@ -37,7 +37,8 @@ The system generates a double pulse test pattern with the following configurable
 ### Timing Specifications
 
 - **Clock Resolution**: 12.5ns (80MHz base clock)
-- **Minimum Pulse Width**: 0.1μs (100ns) - 8 clock ticks
+- **Minimum Pulse High**: 0.025μs (25ns) - 2 clock ticks
+- **Minimum Pulse Low**: 0.125μs (125ns) - 10 clock ticks
 - **Maximum Pulse Width**: ~800ms
 - **Channel Synchronization**: <25ns between complementary outputs
 
@@ -117,10 +118,10 @@ To modify these settings, edit the defines in `src/main_rmt.c`:
 
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|
-| Pulse 1 High | 0.1-65535 μs | 5 μs | First pulse width |
-| Pulse 1 Low | 0.1-65535 μs | 1 μs | Gap after first pulse |
-| Pulse 2 High | 0.1-65535 μs | 3 μs | Second pulse width |
-| Pulse 2 Low | 0.1-65535 μs | 10000 μs | Gap after second pulse |
+| Pulse 1 High | 0.025-65535 μs | 5 μs | First pulse width |
+| Pulse 1 Low | 0.125-65535 μs | 1 μs | Gap after first pulse |
+| Pulse 2 High | 0.025-65535 μs | 3 μs | Second pulse width |
+| Pulse 2 Low | 0.125-65535 μs | 10000 μs | Gap after second pulse |
 
 ## API Reference
 
@@ -177,13 +178,23 @@ The ESP32's RMT peripheral is configured with:
 
 ### High-Precision Timing Details
 
-The system achieves 0.1μs minimum pulse width through:
+The system achieves high precision timing through:
 - **Base Clock**: 80MHz (12.5ns per tick)
-- **Minimum Duration**: 8 ticks = 100ns = 0.1μs
+- **Pulse High Minimum**: 2 ticks = 25ns = 0.025μs
+- **Pulse Low Minimum**: 10 ticks = 125ns = 0.125μs
 - **Conversion Formula**: `ticks = microseconds × 80`
 - **Practical Limits**: 
-  - Minimum: 0.1μs (8 ticks)
-  - Maximum: ~800ms (limited by 32-bit counter)
+  - Pulse High: 0.025μs - ~800ms
+  - Pulse Low: 0.125μs - ~800ms
+  - Maximum: ~800ms (limited by 16-bit RMT duration field)
+
+### Testing Mode
+
+The system operates in testing mode where:
+- **Pulse High**: Can be set as low as 0.025μs (25ns) for maximum precision
+- **Pulse Low**: Minimum 0.125μs (125ns) for reliable RMT operation
+- **No Automatic Adjustment**: All values are used exactly as entered
+- **Debug Logging**: Detailed timing information is logged for analysis
 
 ### Synchronization
 

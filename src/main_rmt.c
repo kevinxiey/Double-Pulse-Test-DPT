@@ -48,11 +48,11 @@
 #define RMT_CLK_DIV         1               // 80MHz / 1 = 80MHz, 1 tick = 12.5ns
 
 // Double Pulse parameters (default values)
-// Note: Minimum pulse width is now 0.1μs (100ns) due to 12.5ns resolution
-static float pulse1_high = 5.0f;      // 5μs
-static float pulse1_low = 1.0f;       // 1μs (can be as low as 0.1μs)
-static float pulse2_high = 3.0f;      // 3μs
-static float pulse2_low = 10000.0f;   // 10000μs
+// Note: Pulse High min 0.025μs, Pulse Low min 0.125μs (25ns resolution) - testing mode
+static float pulse1_high = 5.0f;      // 5μs (minimum 0.025μs)
+static float pulse1_low = 1.0f;       // 1μs (minimum 0.125μs)
+static float pulse2_high = 3.0f;      // 3μs (minimum 0.025μs)
+static float pulse2_low = 10000.0f;   // 10000μs (minimum 0.125μs)
 
 // Function declarations
 void send_double_pulse(void);
@@ -257,25 +257,26 @@ static esp_err_t get_handler(httpd_req_t *req) {
         "<div class='container'>"
         "<h2>Double Pulse Test</h2>"
         "<p style='text-align: center; color: #666; font-size: 12px; margin-bottom: 20px;'>"
-        "High Precision Mode: Minimum pulse width 0.1μs (100ns resolution)"
+        "High Precision Mode: Pulse High min 0.025μs, Pulse Low min 0.125μs (25ns resolution)<br>"
+        "Note: Testing mode - All values will be used exactly as entered"
         "</p>"
         "<div id='message' class='message'></div>"
         "<form onsubmit='submitForm(event)'>"
         "<div class='form-group'>"
         "<label for='p1h'>Pulse 1 High (μs):</label>"
-        "<input type='number' id='p1h' name='p1h' value='%.1f' step='0.1' min='0.1' max='65535'>"
+        "<input type='number' id='p1h' name='p1h' value='%.1f' step='0.025' min='0.025' max='65535'>"
         "</div>"
         "<div class='form-group'>"
         "<label for='p1l'>Pulse 1 Low (μs):</label>"
-        "<input type='number' id='p1l' name='p1l' value='%.1f' step='0.1' min='0.1' max='65535'>"
+        "<input type='number' id='p1l' name='p1l' value='%.1f' step='0.025' min='0.125' max='65535'>"
         "</div>"
         "<div class='form-group'>"
         "<label for='p2h'>Pulse 2 High (μs):</label>"
-        "<input type='number' id='p2h' name='p2h' value='%.1f' step='0.1' min='0.1' max='65535'>"
+        "<input type='number' id='p2h' name='p2h' value='%.1f' step='0.025' min='0.025' max='65535'>"
         "</div>"
         "<div class='form-group'>"
         "<label for='p2l'>Pulse 2 Low (μs):</label>"
-        "<input type='number' id='p2l' name='p2l' value='%.1f' step='0.1' min='0.1' max='65535'>"
+        "<input type='number' id='p2l' name='p2l' value='%.1f' step='0.025' min='0.125' max='65535'>"
         "</div>"
         "<div class='form-group'>"
         "<input type='submit' value='Set'>"
@@ -318,34 +319,34 @@ static esp_err_t set_params_handler(httpd_req_t *req) {
     
     if (httpd_query_key_value(content, "p1h", param_val, sizeof(param_val)) == ESP_OK) {
         temp_val = atof(param_val);
-        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+        if (temp_val >= 0.025f && temp_val <= 65535.0f) {
             pulse1_high = temp_val;
         } else {
-            ESP_LOGW(TAG, "Invalid p1h value: %f (must be 0.1-65535)", temp_val);
+            ESP_LOGW(TAG, "Invalid p1h value: %f (must be 0.025-65535)", temp_val);
         }
     }
     if (httpd_query_key_value(content, "p1l", param_val, sizeof(param_val)) == ESP_OK) {
         temp_val = atof(param_val);
-        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+        if (temp_val >= 0.125f && temp_val <= 65535.0f) {
             pulse1_low = temp_val;
         } else {
-            ESP_LOGW(TAG, "Invalid p1l value: %f (must be 0.1-65535)", temp_val);
+            ESP_LOGW(TAG, "Invalid p1l value: %f (must be 0.125-65535)", temp_val);
         }
     }
     if (httpd_query_key_value(content, "p2h", param_val, sizeof(param_val)) == ESP_OK) {
         temp_val = atof(param_val);
-        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+        if (temp_val >= 0.025f && temp_val <= 65535.0f) {
             pulse2_high = temp_val;
         } else {
-            ESP_LOGW(TAG, "Invalid p2h value: %f (must be 0.1-65535)", temp_val);
+            ESP_LOGW(TAG, "Invalid p2h value: %f (must be 0.025-65535)", temp_val);
         }
     }
     if (httpd_query_key_value(content, "p2l", param_val, sizeof(param_val)) == ESP_OK) {
         temp_val = atof(param_val);
-        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+        if (temp_val >= 0.125f && temp_val <= 65535.0f) {
             pulse2_low = temp_val;
         } else {
-            ESP_LOGW(TAG, "Invalid p2l value: %f (must be 0.1-65535)", temp_val);
+            ESP_LOGW(TAG, "Invalid p2l value: %f (must be 0.125-65535)", temp_val);
         }
     }
 
@@ -438,46 +439,96 @@ static void setup_rmt(void) {
 void send_double_pulse(void) {
     // Convert time units to count values (12.5ns per tick)
     // For 0.1μs = 100ns, we need 100ns / 12.5ns = 8 ticks
-    uint32_t p1h = (uint32_t)(pulse1_high * 80.0f);  // Convert microseconds to ticks (1μs = 80 ticks)
-    uint32_t p1l = (uint32_t)(pulse1_low * 80.0f);
-    uint32_t p2h = (uint32_t)(pulse2_high * 80.0f);
-    uint32_t p2l = (uint32_t)(pulse2_low * 80.0f);
+    // Use proper rounding to avoid truncation errors
+    uint32_t p1h = (uint32_t)(pulse1_high * 80.0f + 0.5f);  // Round to nearest tick
+    uint32_t p1l = (uint32_t)(pulse1_low * 80.0f + 0.5f);
+    uint32_t p2h = (uint32_t)(pulse2_high * 80.0f + 0.5f);
+    uint32_t p2l = (uint32_t)(pulse2_low * 80.0f + 0.5f);
+    
+    // Debug: Log the conversion results
+    ESP_LOGI(TAG, "DPT Parameters: p1h=%.1fμs->%lu ticks, p1l=%.1fμs->%lu ticks, p2h=%.1fμs->%lu ticks, p2l=%.1fμs->%lu ticks",
+             pulse1_high, p1h, pulse1_low, p1l, pulse2_high, p2h, pulse2_low, p2l);
+    
+    // Validate tick values (RMT duration field is 16-bit: 1-65535)
+    // Only apply minimum validation to pulse high, allow pulse low to be tested freely
+    const uint32_t MIN_TICKS_HIGH = 2;  // Minimum 2 ticks for pulse high (25ns)
+    
+    if (p1h < MIN_TICKS_HIGH) {
+        ESP_LOGW(TAG, "p1h too small: %lu ticks, setting to minimum %lu", p1h, MIN_TICKS_HIGH);
+        p1h = MIN_TICKS_HIGH;
+    }
+    if (p2h < MIN_TICKS_HIGH) {
+        ESP_LOGW(TAG, "p2h too small: %lu ticks, setting to minimum %lu", p2h, MIN_TICKS_HIGH);
+        p2h = MIN_TICKS_HIGH;
+    }
+    
+    // Log pulse low values for testing purposes (no automatic adjustment)
+    if (p1l < 16) {
+        ESP_LOGI(TAG, "p1l is %lu ticks (%.1fμs) - testing short pulse low", p1l, pulse1_low);
+    }
+    if (p2l < 16) {
+        ESP_LOGI(TAG, "p2l is %lu ticks (%.1fμs) - testing short pulse low", p2l, pulse2_low);
+    }
+    
+    // No automatic adjustment - user wants precise timing
+    
+    if (p1h > 65535) {
+        ESP_LOGW(TAG, "p1h too large: %lu ticks, clamping to 65535", p1h);
+        p1h = 65535;
+    }
+    if (p1l > 65535) {
+        ESP_LOGW(TAG, "p1l too large: %lu ticks, clamping to 65535", p1l);
+        p1l = 65535;
+    }
+    if (p2h > 65535) {
+        ESP_LOGW(TAG, "p2h too large: %lu ticks, clamping to 65535", p2h);
+        p2h = 65535;
+    }
+    if (p2l > 65535) {
+        ESP_LOGW(TAG, "p2l too large: %lu ticks, clamping to 65535", p2l);
+        p2l = 65535;
+    }
+    
+    ESP_LOGI(TAG, "After validation: p1h=%lu, p1l=%lu, p2h=%lu, p2l=%lu ticks", p1h, p1l, p2h, p2l);
+    
+    // Debug: Log the expected waveform sequence
+    ESP_LOGI(TAG, "Expected waveform sequence:");
+    ESP_LOGI(TAG, "  Pulse 1: HIGH for %.1fμs (%lu ticks) -> LOW for %.1fμs (%lu ticks)", 
+             pulse1_high, p1h, pulse1_low, p1l);
+    ESP_LOGI(TAG, "  Pulse 2: HIGH for %.1fμs (%lu ticks) -> LOW for %.1fμs (%lu ticks)", 
+             pulse2_high, p2h, pulse2_low, p2l);
 
-    // Positive signal items
+    // Positive signal items - Each item contains two time periods
+    // Item 1: First pulse (high + low)
+    // Item 2: Second pulse (high + low)
     rmt_item32_t double_pulse_items_p[] = {
-        { .duration0 = p1h, .level0 = 1, .duration1 = p1l, .level1 = 0 },
-        { .duration0 = p2h, .level0 = 1, .duration1 = p2l, .level1 = 0 }
+        { .duration0 = p1h, .level0 = 1, .duration1 = p1l, .level1 = 0 },  // First pulse: high then low
+        { .duration0 = p2h, .level0 = 1, .duration1 = p2l, .level1 = 0 }   // Second pulse: high then low
     };
 
     // Negative signal items (inverted levels)
     rmt_item32_t double_pulse_items_n[] = {
-        { .duration0 = p1h, .level0 = 0, .duration1 = p1l, .level1 = 1 },  
-        { .duration0 = p2h, .level0 = 0, .duration1 = p2l, .level1 = 1 }   
+        { .duration0 = p1h, .level0 = 0, .duration1 = p1l, .level1 = 1 },  // First pulse: low then high
+        { .duration0 = p2h, .level0 = 0, .duration1 = p2l, .level1 = 1 }   // Second pulse: low then high
     };
 
-    // Clear previous data
+    // Clear previous data and ensure clean state
     rmt_tx_stop(RMT_TX_CHANNEL_P);
     rmt_tx_stop(RMT_TX_CHANNEL_N);
+    vTaskDelay(pdMS_TO_TICKS(10));  // Wait for stop to complete
 
-    portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+    // Try a different approach: send data directly without separate start
+    ESP_LOGI(TAG, "Sending RMT data directly...");
     
-    // Prepare data but do not send immediately
-    ESP_ERROR_CHECK(rmt_write_items(RMT_TX_CHANNEL_P, double_pulse_items_p, 2, false)); 
-    ESP_ERROR_CHECK(rmt_write_items(RMT_TX_CHANNEL_N, double_pulse_items_n, 2, false)); 
-    
-    // Ensure both channels are ready
-    vTaskDelay(50);
-    // Synchronously start both channels
-    portENTER_CRITICAL(&mux);
-    rmt_tx_start(RMT_TX_CHANNEL_P, true);  // Start positive channel second
-    rmt_tx_start(RMT_TX_CHANNEL_N, true);  // Start negative channel first
-    portEXIT_CRITICAL(&mux);
+    // Send data directly (this should handle start automatically)
+    ESP_ERROR_CHECK(rmt_write_items(RMT_TX_CHANNEL_P, double_pulse_items_p, 2, true)); 
+    ESP_ERROR_CHECK(rmt_write_items(RMT_TX_CHANNEL_N, double_pulse_items_n, 2, true));
 
     // Wait for transmission completion
     rmt_wait_tx_done(RMT_TX_CHANNEL_P, portMAX_DELAY);
     rmt_wait_tx_done(RMT_TX_CHANNEL_N, portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Complementary double pulse sent");
+    ESP_LOGI(TAG, "Complementary double pulse sent successfully");
 }
 // ---------------------- Button Interrupt Configuration ----------------------
 void setup_button_interrupt(void)

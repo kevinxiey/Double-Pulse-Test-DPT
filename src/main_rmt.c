@@ -45,13 +45,14 @@
 #define RMT_TX_CHANNEL_N    RMT_CHANNEL_1    // Negative signal channel
 #define RMT_TX_GPIO_P       7                // Positive signal GPIO
 #define RMT_TX_GPIO_N       8                // Negative signal GPIO
-#define RMT_CLK_DIV         1               // 80MHz / 80 = 1μs, 1=12.5ns
+#define RMT_CLK_DIV         1               // 80MHz / 1 = 80MHz, 1 tick = 12.5ns
 
 // Double Pulse parameters (default values)
-static uint32_t pulse1_high = 5;
-static uint32_t pulse1_low = 1;
-static uint32_t pulse2_high = 3;
-static uint32_t pulse2_low = 10000;
+// Note: Minimum pulse width is now 0.1μs (100ns) due to 12.5ns resolution
+static float pulse1_high = 5.0f;      // 5μs
+static float pulse1_low = 1.0f;       // 1μs (can be as low as 0.1μs)
+static float pulse2_high = 3.0f;      // 3μs
+static float pulse2_low = 10000.0f;   // 10000μs
 
 // Function declarations
 void send_double_pulse(void);
@@ -255,23 +256,26 @@ static esp_err_t get_handler(httpd_req_t *req) {
         "<body>"
         "<div class='container'>"
         "<h2>Double Pulse Test</h2>"
+        "<p style='text-align: center; color: #666; font-size: 12px; margin-bottom: 20px;'>"
+        "High Precision Mode: Minimum pulse width 0.1μs (100ns resolution)"
+        "</p>"
         "<div id='message' class='message'></div>"
         "<form onsubmit='submitForm(event)'>"
         "<div class='form-group'>"
-        "<label for='p1h'>Pulse 1 High (us):</label>"
-        "<input type='number' id='p1h' name='p1h' value='%lu'>"
+        "<label for='p1h'>Pulse 1 High (μs):</label>"
+        "<input type='number' id='p1h' name='p1h' value='%.1f' step='0.1' min='0.1' max='65535'>"
         "</div>"
         "<div class='form-group'>"
-        "<label for='p1l'>Pulse 1 Low (us):</label>"
-        "<input type='number' id='p1l' name='p1l' value='%lu'>"
+        "<label for='p1l'>Pulse 1 Low (μs):</label>"
+        "<input type='number' id='p1l' name='p1l' value='%.1f' step='0.1' min='0.1' max='65535'>"
         "</div>"
         "<div class='form-group'>"
-        "<label for='p2h'>Pulse 2 High (us):</label>"
-        "<input type='number' id='p2h' name='p2h' value='%lu'>"
+        "<label for='p2h'>Pulse 2 High (μs):</label>"
+        "<input type='number' id='p2h' name='p2h' value='%.1f' step='0.1' min='0.1' max='65535'>"
         "</div>"
         "<div class='form-group'>"
-        "<label for='p2l'>Pulse 2 Low (us):</label>"
-        "<input type='number' id='p2l' name='p2l' value='%lu'>"
+        "<label for='p2l'>Pulse 2 Low (μs):</label>"
+        "<input type='number' id='p2l' name='p2l' value='%.1f' step='0.1' min='0.1' max='65535'>"
         "</div>"
         "<div class='form-group'>"
         "<input type='submit' value='Set'>"
@@ -286,8 +290,7 @@ static esp_err_t get_handler(httpd_req_t *req) {
         "</div>"
         "</body>"
         "</html>",
-        (unsigned long)pulse1_high, (unsigned long)pulse1_low, 
-        (unsigned long)pulse2_high, (unsigned long)pulse2_low
+        pulse1_high, pulse1_low, pulse2_high, pulse2_low
     );
 
     // Check if `snprintf()` exceeds buffer
@@ -310,25 +313,44 @@ static esp_err_t set_params_handler(httpd_req_t *req) {
     content[ret] = '\0';  // Ensure string termination
     ESP_LOGI(TAG, "Received POST data: %s", content);
 
-    char param_val[10];
+    char param_val[20];  // Increased buffer size for float values
+    float temp_val;
+    
     if (httpd_query_key_value(content, "p1h", param_val, sizeof(param_val)) == ESP_OK) {
-        pulse1_high = atoi(param_val);
+        temp_val = atof(param_val);
+        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+            pulse1_high = temp_val;
+        } else {
+            ESP_LOGW(TAG, "Invalid p1h value: %f (must be 0.1-65535)", temp_val);
+        }
     }
     if (httpd_query_key_value(content, "p1l", param_val, sizeof(param_val)) == ESP_OK) {
-        pulse1_low = atoi(param_val);
+        temp_val = atof(param_val);
+        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+            pulse1_low = temp_val;
+        } else {
+            ESP_LOGW(TAG, "Invalid p1l value: %f (must be 0.1-65535)", temp_val);
+        }
     }
     if (httpd_query_key_value(content, "p2h", param_val, sizeof(param_val)) == ESP_OK) {
-        pulse2_high = atoi(param_val);
+        temp_val = atof(param_val);
+        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+            pulse2_high = temp_val;
+        } else {
+            ESP_LOGW(TAG, "Invalid p2h value: %f (must be 0.1-65535)", temp_val);
+        }
     }
     if (httpd_query_key_value(content, "p2l", param_val, sizeof(param_val)) == ESP_OK) {
-        pulse2_low = atoi(param_val);
+        temp_val = atof(param_val);
+        if (temp_val >= 0.1f && temp_val <= 65535.0f) {
+            pulse2_low = temp_val;
+        } else {
+            ESP_LOGW(TAG, "Invalid p2l value: %f (must be 0.1-65535)", temp_val);
+        }
     }
 
-    ESP_LOGI(TAG, "Updated parameters: p1h=%lu, p1l=%lu, p2h=%lu, p2l=%lu", 
-         (unsigned long) pulse1_high, 
-         (unsigned long) pulse1_low, 
-         (unsigned long) pulse2_high, 
-         (unsigned long) pulse2_low);
+    ESP_LOGI(TAG, "Updated parameters: p1h=%.1f, p1l=%.1f, p2h=%.1f, p2l=%.1f", 
+         pulse1_high, pulse1_low, pulse2_high, pulse2_low);
     httpd_resp_send(req, "Parameters Set!", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
@@ -414,11 +436,12 @@ static void setup_rmt(void) {
 
 // Modified send function with optimized timing control
 void send_double_pulse(void) {
-    // Convert time units to count values under new clock division
-    uint32_t p1h = pulse1_high * 80;  // Convert to new clock division count value
-    uint32_t p1l = pulse1_low * 80;
-    uint32_t p2h = pulse2_high * 80;
-    uint32_t p2l = pulse2_low * 80;
+    // Convert time units to count values (12.5ns per tick)
+    // For 0.1μs = 100ns, we need 100ns / 12.5ns = 8 ticks
+    uint32_t p1h = (uint32_t)(pulse1_high * 80.0f);  // Convert microseconds to ticks (1μs = 80 ticks)
+    uint32_t p1l = (uint32_t)(pulse1_low * 80.0f);
+    uint32_t p2h = (uint32_t)(pulse2_high * 80.0f);
+    uint32_t p2l = (uint32_t)(pulse2_low * 80.0f);
 
     // Positive signal items
     rmt_item32_t double_pulse_items_p[] = {

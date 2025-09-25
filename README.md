@@ -37,7 +37,7 @@ The system generates a double pulse test pattern with the following configurable
 ### Timing Specifications
 
 - **Clock Resolution**: 12.5ns (80MHz base clock)
-- **Minimum Pulse Width**: ~100ns
+- **Minimum Pulse Width**: 0.1μs (100ns) - 8 clock ticks
 - **Maximum Pulse Width**: ~800ms
 - **Channel Synchronization**: <25ns between complementary outputs
 
@@ -117,10 +117,10 @@ To modify these settings, edit the defines in `src/main_rmt.c`:
 
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|
-| Pulse 1 High | 1-65535 μs | 5 μs | First pulse width |
-| Pulse 1 Low | 1-65535 μs | 1 μs | Gap after first pulse |
-| Pulse 2 High | 1-65535 μs | 3 μs | Second pulse width |
-| Pulse 2 Low | 1-65535 μs | 10000 μs | Gap after second pulse |
+| Pulse 1 High | 0.1-65535 μs | 5 μs | First pulse width |
+| Pulse 1 Low | 0.1-65535 μs | 1 μs | Gap after first pulse |
+| Pulse 2 High | 0.1-65535 μs | 3 μs | Second pulse width |
+| Pulse 2 Low | 0.1-65535 μs | 10000 μs | Gap after second pulse |
 
 ## API Reference
 
@@ -174,6 +174,16 @@ The ESP32's RMT peripheral is configured with:
 - Memory blocks: 1 per channel
 - Idle levels: Low for positive, High for negative channel
 - No carrier or looping enabled
+
+### High-Precision Timing Details
+
+The system achieves 0.1μs minimum pulse width through:
+- **Base Clock**: 80MHz (12.5ns per tick)
+- **Minimum Duration**: 8 ticks = 100ns = 0.1μs
+- **Conversion Formula**: `ticks = microseconds × 80`
+- **Practical Limits**: 
+  - Minimum: 0.1μs (8 ticks)
+  - Maximum: ~800ms (limited by 32-bit counter)
 
 ### Synchronization
 
